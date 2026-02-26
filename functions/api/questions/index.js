@@ -1,0 +1,47 @@
+// GET  /api/questions        → 取得所有題目（後台用）
+// POST /api/questions        → 新增題目
+
+export async function onRequestGet({ request, env }) {
+  const url      = new URL(request.url)
+  const category = url.searchParams.get('category') || ''
+  const page     = parseInt(url.searchParams.get('page') || '1', 10)
+  const pageSize = 50
+  const offset   = (page - 1) * pageSize
+
+  let query  = 'SELECT * FROM questions'
+  const args = []
+
+  if (category) {
+    query += ' WHERE category = ?'
+    args.push(category)
+  }
+
+  query += ' ORDER BY id DESC LIMIT ? OFFSET ?'
+  args.push(pageSize, offset)
+
+  const { results } = await env.DB.prepare(query).bind(...args).all()
+
+  return Response.json({ success: true, data: results })
+}
+
+export async function onRequestPost({ request, env }) {
+  const body = await request.json()
+  const { category, difficulty, question, option_1, option_2, option_3, option_4, answer, explanation } = body
+
+  if (!question || !option_1 || !option_2 || !option_3 || !option_4 || !answer) {
+    return Response.json({ success: false, error: '缺少必要欄位' }, { status: 400 })
+  }
+
+  const result = await env.DB.prepare(
+    `INSERT INTO questions (category, difficulty, question, option_1, option_2, option_3, option_4, answer, explanation)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    category || '外幣保險',
+    difficulty || 'medium',
+    question, option_1, option_2, option_3, option_4,
+    Number(answer),
+    explanation || ''
+  ).run()
+
+  return Response.json({ success: true, data: { id: result.meta.last_row_id } })
+}

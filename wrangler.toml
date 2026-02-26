@@ -1,0 +1,8 @@
+name = "exam-quiz"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "./dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "exam-quiz-db"
+database_id = "請填入你的 D1 database_id"
