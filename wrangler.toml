@@ -5,4 +5,4 @@ pages_build_output_dir = "./dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "exam-quiz-db"
-database_id = "請填入你的 D1 database_id"
+database_id = "91d34c20-d249-47e3-a80b-111970251f48"
