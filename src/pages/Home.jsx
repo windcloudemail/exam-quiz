@@ -1,13 +1,21 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getCategories } from '../lib/api.js'
 
-const CATEGORIES = ['全部', '投資型保險', '管理外匯條例', '外幣保險法規', '保險業辦理外匯業務']
 const COUNT_OPTIONS = [10, 20, 30, 40]
 
 export default function Home() {
-  const [count, setCount]       = useState(20)
+  const [count, setCount] = useState(20)
   const [category, setCategory] = useState('全部')
+  const [categories, setCategories] = useState([])
+  const [loadingCats, setLoadingCats] = useState(true)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    getCategories()
+      .then(data => { setCategories(['全部', ...data]); setLoadingCats(false) })
+      .catch(() => { setCategories(['全部']); setLoadingCats(false) })
+  }, [])
 
   const start = () => navigate('/quiz', { state: { count, category } })
 
@@ -28,11 +36,10 @@ export default function Home() {
             <button
               key={n}
               onClick={() => setCount(n)}
-              className={`py-3 rounded-xl font-bold text-base border-2 transition-all ${
-                count === n
+              className={`py-3 rounded-xl font-bold text-base border-2 transition-all ${count === n
                   ? 'border-accent bg-yellow-950 text-accent'
                   : 'border-slate-700 bg-surface text-slate-300 hover:border-slate-500'
-              }`}
+                }`}
             >
               {n} 題
             </button>
@@ -43,21 +50,24 @@ export default function Home() {
       {/* 分類選擇 */}
       <div className="mb-8">
         <p className="text-slate-400 text-sm mb-3 font-medium">分類</p>
-        <div className="flex flex-col gap-2">
-          {CATEGORIES.map(c => (
-            <button
-              key={c}
-              onClick={() => setCategory(c)}
-              className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all text-sm font-medium ${
-                category === c
-                  ? 'border-accent bg-yellow-950 text-accent'
-                  : 'border-slate-700 bg-surface text-slate-300 hover:border-slate-500'
-              }`}
-            >
-              {c === '全部' ? '🔀 全部分類' : `📂 ${c}`}
-            </button>
-          ))}
-        </div>
+        {loadingCats ? (
+          <p className="text-slate-500 text-sm text-center py-4">載入分類中…</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {categories.map(c => (
+              <button
+                key={c}
+                onClick={() => setCategory(c)}
+                className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all text-sm font-medium ${category === c
+                    ? 'border-accent bg-yellow-950 text-accent'
+                    : 'border-slate-700 bg-surface text-slate-300 hover:border-slate-500'
+                  }`}
+              >
+                {c === '全部' ? '🔀 全部分類' : `📂 ${c}`}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 開始按鈕 */}

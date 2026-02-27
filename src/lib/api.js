@@ -24,6 +24,11 @@ export const getRandomQuestions = (count = 20, category = '') =>
 export const getAllQuestions = (page = 1, category = '') =>
   request(`/questions?page=${page}&category=${encodeURIComponent(category)}`)
 
+// 取得所有不重複的分類
+export const getCategories = () =>
+  request('/questions/categories')
+
+
 // 取得單一題目
 export const getQuestion = (id) =>
   request(`/questions/${id}`)

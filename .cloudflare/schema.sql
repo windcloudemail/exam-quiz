@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS questions (
   category    TEXT    NOT NULL DEFAULT '外幣保險',
   difficulty  TEXT    NOT NULL DEFAULT 'medium',  -- easy / medium / hard
   question    TEXT    NOT NULL,
+  question_part2 TEXT NOT NULL DEFAULT '',
   option_1    TEXT    NOT NULL,
   option_2    TEXT    NOT NULL,
   option_3    TEXT    NOT NULL,
