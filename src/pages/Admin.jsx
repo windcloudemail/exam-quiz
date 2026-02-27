@@ -237,7 +237,11 @@ export default function Admin() {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
+    await processFile(file);
+    e.target.value = '' // reset
+  }
 
+  const processFile = async (file) => {
     setUploading(true)
     try {
       const defaultCategory = file.name.replace(/\.[^/.]+$/, "");
@@ -275,9 +279,38 @@ export default function Admin() {
       if (err.message.includes('登入')) handleLogout()
     } finally {
       setUploading(false)
-      e.target.value = '' // reset
     }
   }
+
+  // Handle global global Ctrl+V pasting of an image for bulk import 
+  useEffect(() => {
+    if (!token || showForm) return;
+
+    const handleGlobalPaste = async (e) => {
+      // Don't intercept if user is typing in an input/textarea somewhere else
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+      const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      let imageItem = null;
+      for (let item of items) {
+        if (item.type.indexOf("image") === 0) {
+          imageItem = item;
+          break;
+        }
+      }
+
+      if (imageItem) {
+        e.preventDefault();
+        const file = imageItem.getAsFile();
+        // Generate a pseudo-filename since clipboard doesn't have one
+        const newFile = new File([file], "剪貼簿圖片題庫", { type: file.type });
+        processFile(newFile);
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [token, showForm, questions, selectedCategory]);
 
   const handleSubmit = async (e) => {
     e.preventDefault()
