@@ -98,13 +98,21 @@ export default function Admin() {
 
     setUploading(true)
     try {
+      const defaultCategory = file.name.replace(/\.[^/.]+$/, "");
       const qList = await parseDocument(file)
       if (qList.length === 0) {
         flash('沒有解析出任何題目，請檢查檔案格式是否正確。')
         return
       }
 
-      if (!confirm(`已解析出 ${qList.length} 題，確定要匯入嗎？`)) return
+      // 將所解析出的題目分類標上檔案名稱
+      qList.forEach(q => {
+        if (q.category === '題庫匯入' || !q.category) {
+          q.category = defaultCategory;
+        }
+      });
+
+      if (!confirm(`已依據「${defaultCategory}」解析出 ${qList.length} 題，確定要匯入嗎？`)) return
 
       flash(`正在匯入 ${qList.length} 題...`)
 
