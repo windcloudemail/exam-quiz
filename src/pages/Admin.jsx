@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getAllQuestions, createQuestion, updateQuestion, deleteQuestion } from '../lib/api.js'
+import { getAllQuestions, createQuestion, updateQuestion, deleteQuestion, loginAdmin } from '../lib/api.js'
+import { parseDocument } from '../lib/fileParser.js'
 
 const EMPTY_FORM = {
   category: '外幣保險',
@@ -12,22 +13,55 @@ const EMPTY_FORM = {
 
 export default function Admin() {
   const [questions, setQuestions] = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState('')
-  const [form,      setForm]      = useState(EMPTY_FORM)
-  const [editId,    setEditId]    = useState(null)   // null = 新增模式
-  const [saving,    setSaving]    = useState(false)
-  const [showForm,  setShowForm]  = useState(false)
-  const [msg,       setMsg]       = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [editId, setEditId] = useState(null)   // null = 新增模式
+  const [saving, setSaving] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [token, setToken] = useState(localStorage.getItem('admin_token') || '')
+  const [password, setPassword] = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setLoggingIn(true)
+    setError('')
+    try {
+      const res = await loginAdmin(password)
+      if (res.token) {
+        localStorage.setItem('admin_token', res.token)
+        setToken(res.token)
+        setPassword('')
+      }
+    } catch (err) {
+      setError(err.message || '登入失敗')
+    } finally {
+      setLoggingIn(false)
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('admin_token')
+    setToken('')
+    setQuestions([])
+  }
 
   const load = () => {
+    if (!token) return
     setLoading(true)
     getAllQuestions()
       .then(data => { setQuestions(data); setLoading(false) })
-      .catch(e  => { setError(e.message); setLoading(false) })
+      .catch(e => {
+        if (e.message.includes('登入') || e.status === 401) handleLogout()
+        setError(e.message)
+        setLoading(false)
+      })
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [token])
 
   const flash = (text) => { setMsg(text); setTimeout(() => setMsg(''), 2500) }
 
@@ -58,6 +92,43 @@ export default function Admin() {
     load()
   }
 
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    setUploading(true)
+    try {
+      const qList = await parseDocument(file)
+      if (qList.length === 0) {
+        flash('沒有解析出任何題目，請檢查檔案格式是否正確。')
+        return
+      }
+
+      if (!confirm(`已解析出 ${qList.length} 題，確定要匯入嗎？`)) return
+
+      flash(`正在匯入 ${qList.length} 題...`)
+
+      let successCount = 0
+      for (const q of qList) {
+        try {
+          await createQuestion(q)
+          successCount++
+        } catch (err) {
+          console.error("匯入單題錯誤", err, q)
+        }
+      }
+
+      flash(`成功匯入 ${successCount} 題`)
+      load()
+    } catch (err) {
+      flash(`解析檔案失敗：${err.message}`)
+      if (err.message.includes('登入')) handleLogout()
+    } finally {
+      setUploading(false)
+      e.target.value = '' // reset
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSaving(true)
@@ -75,6 +146,7 @@ export default function Admin() {
       load()
     } catch (err) {
       flash(`錯誤：${err.message}`)
+      if (err.message.includes('登入')) handleLogout()
     } finally {
       setSaving(false)
     }
@@ -83,16 +155,60 @@ export default function Admin() {
   const inputClass = "w-full bg-base border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-accent"
   const labelClass = "block text-xs text-slate-400 mb-1 font-medium"
 
+  if (!token) {
+    return (
+      <div className="max-w-md mx-auto mt-12 bg-surface border border-slate-600 rounded-2xl p-6">
+        <h1 className="text-xl font-black text-white mb-6 text-center">管理員登入</h1>
+        <form onSubmit={handleLogin}>
+          <div className="mb-4">
+            <label className={labelClass}>密碼</label>
+            <input
+              type="password"
+              className={inputClass}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="輸入管理員密碼"
+              required
+            />
+          </div>
+          {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
+          <button
+            type="submit"
+            disabled={loggingIn}
+            className="w-full py-3 bg-accent text-black font-bold rounded-xl hover:bg-yellow-400 disabled:opacity-50 transition-all"
+          >
+            {loggingIn ? '登入中...' : '登入'}
+          </button>
+        </form>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-black text-white">題庫管理</h1>
-        <button
-          onClick={handleNew}
-          className="px-4 py-2 bg-accent text-black font-bold text-sm rounded-lg hover:bg-yellow-400 transition-all"
-        >
-          ＋ 新增題目
-        </button>
+        <div className="flex gap-2">
+          <label className={`px-4 py-2 cursor-pointer font-bold text-sm rounded-lg transition-all ${uploading ? 'bg-slate-600 text-slate-400' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
+            {uploading ? '解析中...' : '📂 上傳題庫 (PDF/DOCX)'}
+            <input
+              type="file"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              className="hidden"
+              onChange={handleFileUpload}
+              disabled={uploading}
+            />
+          </label>
+          <button
+            onClick={handleNew}
+            className="px-4 py-2 bg-accent text-black font-bold text-sm rounded-lg hover:bg-yellow-400 transition-all"
+          >
+            ＋ 新增題目
+          </button>
+          <button onClick={handleLogout} className="px-3 py-2 border border-slate-600 text-slate-300 rounded-lg text-sm hover:border-slate-400">
+            登出
+          </button>
+        </div>
       </div>
 
       {/* 訊息提示 */}
@@ -131,7 +247,7 @@ export default function Admin() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-3">
-            {[1,2,3,4].map(n => (
+            {[1, 2, 3, 4].map(n => (
               <div key={n}>
                 <label className={labelClass}>選項 {n}</label>
                 <input className={inputClass} value={form[`option_${n}`]}
@@ -144,7 +260,7 @@ export default function Admin() {
             <label className={labelClass}>正確答案</label>
             <select className={inputClass} value={form.answer}
               onChange={e => setForm(f => ({ ...f, answer: Number(e.target.value) }))}>
-              {[1,2,3,4].map(n => (
+              {[1, 2, 3, 4].map(n => (
                 <option key={n} value={n}>選項 {n}</option>
               ))}
             </select>

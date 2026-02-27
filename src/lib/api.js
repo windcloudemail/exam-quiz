@@ -3,8 +3,12 @@
 const BASE = '/api'
 
 async function request(path, options = {}) {
+  const token = localStorage.getItem('admin_token')
+  const headers = { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...headers, ...(options.headers || {}) },
     ...options,
   })
   const json = await res.json()
@@ -35,3 +39,7 @@ export const updateQuestion = (id, data) =>
 // 刪除題目
 export const deleteQuestion = (id) =>
   request(`/questions/${id}`, { method: 'DELETE' })
+
+// 登入
+export const loginAdmin = (password) =>
+  request('/auth/login', { method: 'POST', body: JSON.stringify({ password }) })
