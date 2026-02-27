@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as mammoth from 'mammoth';
+import Tesseract from 'tesseract.js';
 
 // Set up the worker for pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
@@ -15,8 +16,10 @@ export async function parseDocument(file) {
         file.name.endsWith('.docx')
     ) {
         return await parseDOCX(file);
+    } else if (fileType.startsWith('image/')) {
+        return await parseImage(file);
     } else {
-        throw new Error('不支援的檔案格式，請上傳 PDF 或 DOCX 檔');
+        throw new Error('不支援的檔案格式，請上傳 PDF、DOCX 或圖片檔');
     }
 }
 
@@ -39,6 +42,24 @@ async function parseDOCX(file) {
     const arrayBuffer = await file.arrayBuffer();
     const result = await mammoth.extractRawText({ arrayBuffer });
     return extractQuestions(result.value);
+}
+
+async function parseImage(file) {
+    const { data: { text } } = await Tesseract.recognize(file, 'chi_tra', {
+        logger: m => console.log(m)
+    });
+
+    // Cleanup OCR noise spacing but PRESERVE newlines since the parser needs them
+    let cleaned = text.replace(/[ \t\r]+/g, (match, offset, str) => {
+        const prev = str[offset - 1];
+        const next = str[offset + match.length];
+        if (prev && next && /[a-zA-Z0-9]/.test(prev) && /[a-zA-Z0-9]/.test(next)) {
+            return ' '; // preserve space between alphanumeric characters
+        }
+        return ''; // remove space between asian characters
+    }).trim();
+
+    return extractQuestions(cleaned);
 }
 
 function extractQuestions(text) {

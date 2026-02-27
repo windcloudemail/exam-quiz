@@ -383,10 +383,10 @@ export default function Admin() {
         <h1 className="text-xl font-black text-white">題庫管理</h1>
         <div className="flex gap-2">
           <label className={`px-4 py-2 cursor-pointer font-bold text-sm rounded-lg transition-all ${uploading ? 'bg-slate-600 text-slate-400' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
-            {uploading ? '解析中...' : '📂 上傳題庫 (PDF/DOCX)'}
+            {uploading ? '解析中...' : '📂 上傳題庫 (PDF/DOCX/圖片)'}
             <input
               type="file"
-              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
               className="hidden"
               onChange={handleFileUpload}
               disabled={uploading}
