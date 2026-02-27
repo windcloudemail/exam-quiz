@@ -1,6 +1,60 @@
 import { useState, useEffect } from 'react'
-import { getAllQuestions, createQuestion, updateQuestion, deleteQuestion, loginAdmin } from '../lib/api.js'
+import { getAllQuestions, createQuestion, updateQuestion, deleteQuestion, loginAdmin, reorderQuestions } from '../lib/api.js'
 import { parseDocument } from '../lib/fileParser.js'
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+function SortableQuestionRow({ q, displayIndex, selectedIds, toggleSelect, handleEdit, handleDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: q.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="bg-surface border border-slate-700 rounded-xl p-4 flex gap-3 relative z-10">
+      <div
+        {...attributes}
+        {...listeners}
+        className="pt-1.5 shrink-0 cursor-grab active:cursor-grabbing text-slate-500 hover:text-white"
+        title="拖曳排序"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+      </div>
+
+      <div className="pt-1.5 shrink-0">
+        <input
+          type="checkbox"
+          className="w-4 h-4 rounded border-slate-600 bg-base text-accent cursor-pointer"
+          checked={selectedIds.has(q.id)}
+          onChange={() => toggleSelect(q.id)}
+        />
+      </div>
+      <div className="flex items-start justify-between gap-3 w-full">
+        <div className="flex-1 min-w-0">
+          <div className="flex gap-2 mb-1 flex-wrap items-center">
+            <span className="text-xs font-bold bg-accent text-black px-2 py-0.5 rounded-md">Q{displayIndex}</span>
+            <span className="text-xs bg-primary text-blue-200 px-2 py-0.5 rounded-md">{q.category}</span>
+          </div>
+          <p className="text-sm text-slate-200 leading-relaxed line-clamp-2">{q.question}</p>
+          <p className="text-xs text-green-400 mt-1">答案：選項 {q.answer}</p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <button onClick={() => handleEdit(q)}
+            className="px-3 py-1.5 text-xs border border-slate-600 text-slate-300 rounded-lg hover:border-accent hover:text-accent transition-all z-20">
+            編輯
+          </button>
+          <button onClick={() => handleDelete(q.id)}
+            className="px-3 py-1.5 text-xs border border-red-800 text-red-400 rounded-lg hover:bg-red-950 transition-all z-20">
+            刪除
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const EMPTY_FORM = {
   category: '外幣保險',
@@ -135,6 +189,35 @@ export default function Admin() {
       setSelectedIds(new Set())
     }
   }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    if (active.id !== over.id) {
+      const oldIndex = questions.findIndex(q => q.id === active.id);
+      const newIndex = questions.findIndex(q => q.id === over.id);
+
+      const newArr = arrayMove(questions, oldIndex, newIndex);
+      setQuestions([...newArr]);
+
+      // Only reorder the sequence of the currently filtered items on the backend
+      const categoryArr = newArr.filter(q => q.category === selectedCategory || (!selectedCategory));
+      const orderedIds = categoryArr.map(q => q.id);
+
+      try {
+        await reorderQuestions(orderedIds);
+      } catch (err) {
+        if (err.message.includes('登入')) handleLogout();
+        flash(`排序儲存失敗: ${err.message}`);
+      }
+    }
+  };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0]
@@ -382,38 +465,22 @@ export default function Admin() {
         <p className="text-red-400 text-center py-8">{error}</p>
       ) : (
         <div className="flex flex-col gap-3">
-          {filteredQuestions.map(q => (
-            <div key={q.id} className="bg-surface border border-slate-700 rounded-xl p-4 flex gap-3">
-              <div className="pt-1.5 shrink-0">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 rounded border-slate-600 bg-base text-accent cursor-pointer"
-                  checked={selectedIds.has(q.id)}
-                  onChange={() => toggleSelect(q.id)}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={filteredQuestions.map(q => q.id)} strategy={verticalListSortingStrategy}>
+              {filteredQuestions.map((q, index) => (
+                <SortableQuestionRow
+                  key={q.id}
+                  q={q}
+                  displayIndex={index + 1}
+                  selectedIds={selectedIds}
+                  toggleSelect={toggleSelect}
+                  handleEdit={handleEdit}
+                  handleDelete={handleDelete}
                 />
-              </div>
-              <div className="flex items-start justify-between gap-3 w-full">
-                <div className="flex-1 min-w-0">
-                  <div className="flex gap-2 mb-1 flex-wrap">
-                    <span className="text-xs bg-primary text-blue-200 px-2 py-0.5 rounded-md">{q.category}</span>
-                    <span className="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md">#{q.id}</span>
-                  </div>
-                  <p className="text-sm text-slate-200 leading-relaxed line-clamp-2">{q.question}</p>
-                  <p className="text-xs text-green-400 mt-1">答案：選項 {q.answer}</p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={() => handleEdit(q)}
-                    className="px-3 py-1.5 text-xs border border-slate-600 text-slate-300 rounded-lg hover:border-accent hover:text-accent transition-all">
-                    編輯
-                  </button>
-                  <button onClick={() => handleDelete(q.id)}
-                    className="px-3 py-1.5 text-xs border border-red-800 text-red-400 rounded-lg hover:bg-red-950 transition-all">
-                    刪除
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+              ))}
+            </SortableContext>
+          </DndContext>
+
           {filteredQuestions.length === 0 && (
             <p className="text-slate-500 text-center py-8">
               {questions.length === 0 ? '尚無題目，請先新增' : '此分類下沒有題目'}

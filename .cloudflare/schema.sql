@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS questions (
   option_4    TEXT    NOT NULL,
   answer      INTEGER NOT NULL,  -- 1, 2, 3, 或 4
   explanation TEXT    NOT NULL DEFAULT '',
+  order_index INTEGER NOT NULL DEFAULT 0,
   created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 

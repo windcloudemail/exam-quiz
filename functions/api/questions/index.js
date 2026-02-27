@@ -2,13 +2,13 @@
 // POST /api/questions        → 新增題目
 
 export async function onRequestGet({ request, env }) {
-  const url      = new URL(request.url)
+  const url = new URL(request.url)
   const category = url.searchParams.get('category') || ''
-  const page     = parseInt(url.searchParams.get('page') || '1', 10)
-  const pageSize = 50
-  const offset   = (page - 1) * pageSize
+  const page = parseInt(url.searchParams.get('page') || '1', 10)
+  const pageSize = 1000
+  const offset = (page - 1) * pageSize
 
-  let query  = 'SELECT * FROM questions'
+  let query = 'SELECT * FROM questions'
   const args = []
 
   if (category) {
@@ -16,7 +16,7 @@ export async function onRequestGet({ request, env }) {
     args.push(category)
   }
 
-  query += ' ORDER BY id DESC LIMIT ? OFFSET ?'
+  query += ' ORDER BY order_index ASC, id ASC LIMIT ? OFFSET ?'
   args.push(pageSize, offset)
 
   const { results } = await env.DB.prepare(query).bind(...args).all()

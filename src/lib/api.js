@@ -40,6 +40,10 @@ export const updateQuestion = (id, data) =>
 export const deleteQuestion = (id) =>
   request(`/questions/${id}`, { method: 'DELETE' })
 
+// 批次更新題目順序
+export const reorderQuestions = (orderedIds) =>
+  request('/questions/reorder', { method: 'POST', body: JSON.stringify({ orderedIds }) })
+
 // 登入
 export const loginAdmin = (password) =>
   request('/auth/login', { method: 'POST', body: JSON.stringify({ password }) })
