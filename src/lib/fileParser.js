@@ -113,7 +113,8 @@ function extractQuestions(text) {
                 }
 
                 return {
-                    q: (t.substring(0, i1).trim() + (remTail ? ' ______ ' + remTail : '')),
+                    q: t.substring(0, i1).trim(),
+                    qp2: remTail ? remTail : '',
                     o1: t.substring(i1 + m[0].length, i2).trim(),
                     o2: t.substring(i2 + m[1].length, i3).trim(),
                     o3: t.substring(i3 + m[2].length, i4).trim(),
@@ -126,12 +127,14 @@ function extractQuestions(text) {
         const opts = extractOptions(fullText);
         if (opts) {
             currentObj.question = opts.q;
+            currentObj.question_part2 = opts.qp2;
             currentObj.option_1 = opts.o1;
             currentObj.option_2 = opts.o2;
             currentObj.option_3 = opts.o3;
             currentObj.option_4 = opts.o4;
         } else {
             currentObj.question = fullText;
+            currentObj.question_part2 = '';
         }
 
         // 去除最後的句號

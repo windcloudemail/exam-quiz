@@ -4,6 +4,7 @@ import { parseDocument } from '../lib/fileParser.js'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import Tesseract from 'tesseract.js';
 
 function SortableQuestionRow({ q, displayIndex, selectedIds, toggleSelect, handleEdit, handleDelete }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: q.id });
@@ -39,6 +40,11 @@ function SortableQuestionRow({ q, displayIndex, selectedIds, toggleSelect, handl
             <span className="text-xs bg-primary text-blue-200 px-2 py-0.5 rounded-md">{q.category}</span>
           </div>
           <p className="text-sm text-slate-200 leading-relaxed line-clamp-2">{q.question}</p>
+          {q.question_part2 && (
+            <p className="text-sm text-slate-400 leading-relaxed line-clamp-1 mt-1 border-t border-slate-700/50 pt-1">
+              {q.question_part2}
+            </p>
+          )}
           <p className="text-xs text-green-400 mt-1">答案：選項 {q.answer}</p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -60,6 +66,7 @@ const EMPTY_FORM = {
   category: '外幣保險',
   difficulty: 'medium',
   question: '',
+  question_part2: '',
   option_1: '', option_2: '', option_3: '', option_4: '',
   answer: 1,
   explanation: '',
@@ -75,6 +82,7 @@ export default function Admin() {
   const [showForm, setShowForm] = useState(false)
   const [msg, setMsg] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [ocrLoading, setOcrLoading] = useState(false)
   const [token, setToken] = useState(localStorage.getItem('admin_token') || '')
   const [password, setPassword] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
@@ -124,7 +132,7 @@ export default function Admin() {
   const handleEdit = (q) => {
     setForm({
       category: q.category, difficulty: q.difficulty,
-      question: q.question,
+      question: q.question, question_part2: q.question_part2 || '',
       option_1: q.option_1, option_2: q.option_2,
       option_3: q.option_3, option_4: q.option_4,
       answer: q.answer, explanation: q.explanation,
@@ -287,6 +295,38 @@ export default function Admin() {
     }
   }
 
+  const handlePasteImageOCR = async (e, fieldName) => {
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    let imageItem = null;
+    for (let item of items) {
+      if (item.type.indexOf("image") === 0) {
+        imageItem = item;
+        break;
+      }
+    }
+
+    if (!imageItem) return;
+    e.preventDefault();
+
+    const file = imageItem.getAsFile();
+    setOcrLoading(true);
+    flash('🖼️ 正在透過 OCR 解析圖片文字，請稍候...');
+
+    try {
+      const { data: { text } } = await Tesseract.recognize(file, 'chi_tra', {
+        logger: m => console.log(m)
+      });
+      const cleaned = text.replace(/[\r\n]+/g, ' ').trim();
+      setForm(f => ({ ...f, [fieldName]: f[fieldName] + cleaned }));
+      flash('✅ 圖片文字解析成功！');
+    } catch (error) {
+      console.error(error);
+      flash('❌ OCR 解析失敗。');
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
   const inputClass = "w-full bg-base border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-accent"
   const labelClass = "block text-xs text-slate-400 mb-1 font-medium"
 
@@ -413,10 +453,39 @@ export default function Admin() {
             </div>
           </div>
 
-          <div className="mb-3">
-            <label className={labelClass}>題目內容</label>
-            <textarea className={inputClass} rows={4} value={form.question}
-              onChange={e => setForm(f => ({ ...f, question: e.target.value }))} required />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div className="relative">
+              <label className={labelClass}>
+                題目內容 1 (選項前)
+                <span className="ml-2 text-[10px] text-accent bg-accent/10 px-1 py-0.5 rounded">可 Ctrl+V 貼上圖片解析</span>
+              </label>
+              <textarea
+                className={`${inputClass} ${ocrLoading ? 'opacity-50' : ''}`}
+                rows={4}
+                value={form.question}
+                placeholder="在此貼上題目... 或直接使用 Ctrl+V 貼上圖片進行文字辨識"
+                onChange={e => setForm(f => ({ ...f, question: e.target.value }))}
+                onPaste={e => handlePasteImageOCR(e, 'question')}
+                required
+                disabled={ocrLoading}
+              />
+            </div>
+
+            <div className="relative">
+              <label className={labelClass}>
+                題目內容 2 (選項後 / 選填)
+                <span className="ml-2 text-[10px] text-accent bg-accent/10 px-1 py-0.5 rounded">可 Ctrl+V 貼上圖片解析</span>
+              </label>
+              <textarea
+                className={`${inputClass} ${ocrLoading ? 'opacity-50' : ''}`}
+                rows={4}
+                value={form.question_part2}
+                placeholder="選填，若有「內嵌選項」後方的剩餘文字可填入此處..."
+                onChange={e => setForm(f => ({ ...f, question_part2: e.target.value }))}
+                onPaste={e => handlePasteImageOCR(e, 'question_part2')}
+                disabled={ocrLoading}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-3">
