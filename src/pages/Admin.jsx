@@ -81,7 +81,10 @@ export default function Admin() {
   }
 
   const handleNew = () => {
-    setForm(EMPTY_FORM)
+    setForm({
+      ...EMPTY_FORM,
+      category: selectedCategory || '外幣保險' // Use the selected test bank as default if filtered
+    })
     setEditId(null)
     setShowForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
