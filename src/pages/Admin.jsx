@@ -145,12 +145,19 @@ export default function Admin() {
   const handleNew = () => {
     setForm({
       ...EMPTY_FORM,
-      category: selectedCategory || '外幣保險' // Use the selected test bank as default if filtered
+      category: selectedCategory || '外幣保險'
     })
     setEditId(null)
     setShowForm(true)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // Bind the form's category to changes in the filter dropdown if adding a new question
+  useEffect(() => {
+    if (showForm && !editId && selectedCategory) {
+      setForm(f => ({ ...f, category: selectedCategory }));
+    }
+  }, [selectedCategory, showForm, editId]);
 
   const handleDelete = async (id) => {
     if (!confirm('確定要刪除這題嗎？')) return
@@ -316,7 +323,18 @@ export default function Admin() {
       const { data: { text } } = await Tesseract.recognize(file, 'chi_tra', {
         logger: m => console.log(m)
       });
-      const cleaned = text.replace(/[\r\n]+/g, ' ').trim();
+
+      // Remove all line breaks. Then remove spaces, UNLESS the space is surrounded by english/numbers.
+      let cleaned = text.replace(/[\r\n]+/g, '');
+      cleaned = cleaned.replace(/\s+/g, (match, offset, str) => {
+        const prev = str[offset - 1];
+        const next = str[offset + match.length];
+        if (prev && next && /[a-zA-Z0-9]/.test(prev) && /[a-zA-Z0-9]/.test(next)) {
+          return ' '; // preserve space between alphanumeric characters
+        }
+        return ''; // remove space between asian characters
+      }).trim();
+
       setForm(f => ({ ...f, [fieldName]: f[fieldName] + cleaned }));
       flash('✅ 圖片文字解析成功！');
     } catch (error) {
@@ -440,7 +458,11 @@ export default function Admin() {
             <div>
               <label className={labelClass}>分類</label>
               <input className={inputClass} value={form.category}
+                list="category-options"
                 onChange={e => setForm(f => ({ ...f, category: e.target.value }))} required />
+              <datalist id="category-options">
+                {uniqueCategories.map(cat => <option key={cat} value={cat} />)}
+              </datalist>
             </div>
             <div>
               <label className={labelClass}>難度</label>
