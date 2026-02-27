@@ -302,9 +302,50 @@ export default function Admin() {
       if (imageItem) {
         e.preventDefault();
         const file = imageItem.getAsFile();
-        // Generate a pseudo-filename since clipboard doesn't have one
         const newFile = new File([file], "剪貼簿圖片題庫", { type: file.type });
-        processFile(newFile);
+
+        // Instead of calling processFile directly which enforces strict regex,
+        // let's try the strict regex first, but if it yields 0, fallback to raw OCR injection:
+        setUploading(true);
+        try {
+          const qList = await parseDocument(newFile);
+          if (qList.length > 0) {
+            // It found structured questions, so run the standard bulk importer
+            qList.forEach(q => {
+              q.category = selectedCategory || '外幣保險';
+            });
+            if (confirm(`解析出 ${qList.length} 題，確定要匯入嗎？`)) {
+              flash(`正在匯入 ${qList.length} 題...`);
+              let successCount = 0;
+              for (const q of qList) {
+                try { await createQuestion(q); successCount++; } catch (err) { }
+              }
+              flash(`成功匯入 ${successCount} 題`);
+              load();
+            }
+          } else {
+            // Regex failed to find options. Just OCR it and open the Add form:
+            flash('找不到完整選擇題結構，為您將文字匯入新增表單...');
+            const { data: { text } } = await Tesseract.recognize(newFile, 'chi_tra');
+
+            let cleaned = text.replace(/[\r\n]+/g, '');
+            cleaned = cleaned.replace(/\s+/g, (match, offset, str) => {
+              const prev = str[offset - 1];
+              const next = str[offset + match.length];
+              if (prev && next && /[a-zA-Z0-9]/.test(prev) && /[a-zA-Z0-9]/.test(next)) return ' ';
+              return '';
+            }).trim();
+
+            setForm({ ...EMPTY_FORM, category: selectedCategory || '外幣保險', question: cleaned });
+            setEditId(null);
+            setShowForm(true);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        } catch (err) {
+          flash(`解析失敗：${err.message}`);
+        } finally {
+          setUploading(false);
+        }
       }
     };
 
