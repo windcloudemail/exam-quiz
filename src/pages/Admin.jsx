@@ -24,6 +24,8 @@ export default function Admin() {
   const [token, setToken] = useState(localStorage.getItem('admin_token') || '')
   const [password, setPassword] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -90,6 +92,45 @@ export default function Admin() {
     await deleteQuestion(id)
     flash('已刪除')
     load()
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`確定要刪除選取的 ${selectedIds.size} 題嗎？`)) return
+
+    setLoading(true)
+    let errCount = 0
+    for (const id of selectedIds) {
+      try {
+        await deleteQuestion(id)
+      } catch (err) {
+        errCount++
+      }
+    }
+
+    if (errCount > 0) flash(`刪除完成，但有 ${errCount} 題發生錯誤`)
+    else flash(`已成功刪除 ${selectedIds.size} 題`)
+
+    setSelectedIds(new Set())
+    load()
+  }
+
+  const toggleSelect = (id) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+
+  const uniqueCategories = Array.from(new Set(questions.map(q => q.category))).filter(Boolean)
+  const filteredQuestions = selectedCategory ? questions.filter(q => q.category === selectedCategory) : questions
+
+  const toggleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedIds(new Set(filteredQuestions.map(q => q.id)))
+    } else {
+      setSelectedIds(new Set())
+    }
   }
 
   const handleFileUpload = async (e) => {
@@ -219,6 +260,44 @@ export default function Admin() {
         </div>
       </div>
 
+      {/* 工具列：分類過濾與批次操作 */}
+      {!loading && !error && questions.length > 0 && (
+        <div className="fadeIn flex flex-wrap items-center justify-between mb-6 gap-4 bg-surface border border-slate-700 p-4 rounded-xl">
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-bold text-slate-300">選擇題本：</label>
+            <select
+              className="bg-base border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-accent"
+              value={selectedCategory}
+              onChange={e => { setSelectedCategory(e.target.value); setSelectedIds(new Set()) }}
+            >
+              <option value="">顯示全部 ({questions.length})</option>
+              {uniqueCategories.map(cat => (
+                <option key={cat} value={cat}>{cat} ({questions.filter(q => q.category === cat).length})</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer user-select-none">
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-slate-600 bg-base text-accent"
+                checked={filteredQuestions.length > 0 && selectedIds.size === filteredQuestions.length}
+                onChange={toggleSelectAll}
+                disabled={filteredQuestions.length === 0}
+              />
+              全選本頁
+            </label>
+            <button
+              onClick={handleBulkDelete}
+              disabled={selectedIds.size === 0}
+              className="px-4 py-2 text-sm font-bold bg-red-900/50 text-red-400 border border-red-800 rounded-lg hover:bg-red-800 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              批次刪除 ({selectedIds.size})
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 訊息提示 */}
       {msg && (
         <div className="fadeIn mb-4 px-4 py-3 bg-green-900 border border-green-600 text-green-300 text-sm rounded-xl">
@@ -300,9 +379,17 @@ export default function Admin() {
         <p className="text-red-400 text-center py-8">{error}</p>
       ) : (
         <div className="flex flex-col gap-3">
-          {questions.map(q => (
-            <div key={q.id} className="bg-surface border border-slate-700 rounded-xl p-4">
-              <div className="flex items-start justify-between gap-3">
+          {filteredQuestions.map(q => (
+            <div key={q.id} className="bg-surface border border-slate-700 rounded-xl p-4 flex gap-3">
+              <div className="pt-1.5 shrink-0">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-slate-600 bg-base text-accent cursor-pointer"
+                  checked={selectedIds.has(q.id)}
+                  onChange={() => toggleSelect(q.id)}
+                />
+              </div>
+              <div className="flex items-start justify-between gap-3 w-full">
                 <div className="flex-1 min-w-0">
                   <div className="flex gap-2 mb-1 flex-wrap">
                     <span className="text-xs bg-primary text-blue-200 px-2 py-0.5 rounded-md">{q.category}</span>
@@ -324,8 +411,10 @@ export default function Admin() {
               </div>
             </div>
           ))}
-          {questions.length === 0 && (
-            <p className="text-slate-500 text-center py-8">尚無題目，請先新增</p>
+          {filteredQuestions.length === 0 && (
+            <p className="text-slate-500 text-center py-8">
+              {questions.length === 0 ? '尚無題目，請先新增' : '此分類下沒有題目'}
+            </p>
           )}
         </div>
       )}
