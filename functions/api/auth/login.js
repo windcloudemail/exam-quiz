@@ -6,7 +6,7 @@ export async function onRequestPost({ request, env }) {
 
         if (password === ADMIN_PASSWORD) {
             // Return a simple static token for V1 (or could be dynamic)
-            return Response.json({ success: true, token: 'v1-admin-token-secure' })
+            return Response.json({ success: true, data: { token: 'v1-admin-token-secure' } })
         } else {
             return Response.json({ success: false, error: '密碼錯誤' }, { status: 401 })
         }

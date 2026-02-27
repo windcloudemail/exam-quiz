@@ -42,100 +42,135 @@ async function parseDOCX(file) {
 }
 
 function extractQuestions(text) {
-    // 嘗試找出選擇題的題幹與選項
-    // 由於規格書裡的題目格式可能不一，這裡實作一個簡單的 Regex 剖析器
-    // 假設格式：
-    // 1. 什麼是外幣保險？
-    // (1)選項一 (2)選項二 (3)選項三 (4)選項四
-    // 答案：1
-    // 解說：這是解說
-
     const questions = [];
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
 
     let currentObj = null;
 
-    // Very basic heuristic parser based on common Taiwan exam formats
+    const pushCurrentObj = () => {
+        if (!currentObj || !currentObj._rawText) return;
+
+        let fullText = currentObj._rawText.trim();
+
+        // 1. 抽取解說
+        const expMatch = fullText.match(/【?(?:解說|解析|說明)】?[:：\s]*(.*?)$/is);
+        if (expMatch) {
+            currentObj.explanation = expMatch[1].trim();
+            fullText = fullText.substring(0, expMatch.index).trim();
+        }
+
+        // 2. 抽取答案 (如果原本沒抓到)
+        if (!currentObj.answer) {
+            const ansMatch = fullText.match(/【?(?:答案|解答|Ans)】?[:：\s]*(?:\(|（|)?([1-4A-D])(?:\)|）|)?/i);
+            if (ansMatch) {
+                const val = ansMatch[1];
+                if (['1', 'A', 'a'].includes(val)) currentObj.answer = 1;
+                else if (['2', 'B', 'b'].includes(val)) currentObj.answer = 2;
+                else if (['3', 'C', 'c'].includes(val)) currentObj.answer = 3;
+                else if (['4', 'D', 'd'].includes(val)) currentObj.answer = 4;
+                fullText = fullText.substring(0, ansMatch.index).trim();
+            }
+        }
+
+        // 3. 抽取選項
+        const extractOptions = (t) => {
+            const markersList = [
+                ['(1)', '(2)', '(3)', '(4)'],
+                ['（1）', '（2）', '（3）', '（4）'],
+                ['①', '②', '③', '④'],
+                ['(A)', '(B)', '(C)', '(D)'],
+                ['（A）', '（B）', '（C）', '（D）'],
+                ['A.', 'B.', 'C.', 'D.'],
+                ['A、', 'B、', 'C、', 'D、'],
+                ['Ａ', 'Ｂ', 'Ｃ', 'Ｄ']
+            ];
+
+            for (const m of markersList) {
+                const i1 = t.lastIndexOf(m[0]);
+                if (i1 === -1) continue;
+                const i2 = t.indexOf(m[1], i1);
+                if (i2 === -1) continue;
+                const i3 = t.indexOf(m[2], i2);
+                if (i3 === -1) continue;
+                const i4 = t.indexOf(m[3], i3);
+                if (i4 === -1) continue;
+
+                if (m[0] === 'Ａ' && i1 > 0 && t.substring(i1 - 1, i1).includes('(')) continue;
+
+                return {
+                    q: t.substring(0, i1).trim(),
+                    o1: t.substring(i1 + m[0].length, i2).trim(),
+                    o2: t.substring(i2 + m[1].length, i3).trim(),
+                    o3: t.substring(i3 + m[2].length, i4).trim(),
+                    o4: t.substring(i4 + m[3].length).trim(),
+                };
+            }
+            return null;
+        };
+
+        const opts = extractOptions(fullText);
+        if (opts) {
+            currentObj.question = opts.q;
+            currentObj.option_1 = opts.o1;
+            currentObj.option_2 = opts.o2;
+            currentObj.option_3 = opts.o3;
+            currentObj.option_4 = opts.o4;
+        } else {
+            currentObj.question = fullText;
+        }
+
+        // 去除最後的句號
+        if (currentObj.option_4) {
+            currentObj.option_4 = currentObj.option_4.replace(/。$/, '').trim();
+        }
+
+        if (currentObj.question && currentObj.option_1 && currentObj.option_2 && currentObj.answer >= 1 && currentObj.answer <= 4) {
+            delete currentObj._rawText;
+            questions.push(currentObj);
+        }
+    };
+
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
 
-        // 偵測題號 (例如 "1.", "01.", "1、")
-        const questionMatch = line.match(/^(\d+)[\.、\s]+(.+)/);
-        if (questionMatch) {
-            if (currentObj && isQuestionValid(currentObj)) {
-                questions.push(currentObj);
-            }
+        if (line.replace(/\s/g, '').includes('題號答案')) continue;
+
+        const newFormatMatch = line.match(/^(\d+)\s+([1-4])(?:\s+(.*))?$/);
+        const oldFormatMatch = line.match(/^(\d+)[\.、]\s*(.*)$/);
+
+        let isNewStart = false;
+        let qText = '';
+        let qAns = null;
+
+        if (newFormatMatch) {
+            isNewStart = true;
+            qAns = parseInt(newFormatMatch[2]);
+            qText = newFormatMatch[3] || '';
+        } else if (oldFormatMatch) {
+            isNewStart = true;
+            qText = oldFormatMatch[2] || '';
+        }
+
+        if (isNewStart) {
+            pushCurrentObj();
             currentObj = {
-                question: questionMatch[2].trim(),
+                _rawText: qText,
                 option_1: '', option_2: '', option_3: '', option_4: '',
-                answer: 1,
+                answer: qAns || 1,
                 explanation: '',
-                category: '未分類',
+                category: '題庫匯入',
                 difficulty: 'medium'
             };
-            continue;
-        }
-
-        if (!currentObj) continue;
-
-        // 偵測選項 (例如 "(1)xxx (2)yyy (3)zzz (4)www" 或 "A.xxx B.yyy C.zzz D.www")
-        // 或者單行選項 "(1)xxx"
-        let optionMatch = line.match(/(?:\(|（|)[1A](?:\)|）|\.|、)(.+?)(?:\(|（|)[2B](?:\)|）|\.|、)(.+?)(?:\(|（|)[3C](?:\)|）|\.|、)(.+?)(?:\(|（|)[4D](?:\)|）|\.|、)(.+)/);
-        if (optionMatch) {
-            currentObj.option_1 = optionMatch[1].trim();
-            currentObj.option_2 = optionMatch[2].trim();
-            currentObj.option_3 = optionMatch[3].trim();
-            currentObj.option_4 = optionMatch[4].trim();
-            continue;
-        }
-
-        // 多行選項
-        const singleOptionMatch = line.match(/^(?:\(|（|)?([1-4A-D])(?:\)|）|\.|、)\s*(.+)/);
-        if (singleOptionMatch) {
-            const idx = parseOptionIndex(singleOptionMatch[1]);
-            if (idx >= 1 && idx <= 4) {
-                currentObj[`option_${idx}`] = singleOptionMatch[2].trim();
+        } else if (currentObj) {
+            if (currentObj._rawText) {
+                currentObj._rawText += '\n' + line;
+            } else {
+                currentObj._rawText = line;
             }
-            continue;
-        }
-
-        // 偵測答案 (例如 "答案: 1" 或 "解答：(A)")
-        const answerMatch = line.match(/^(?:答案|解答|Ans)[:：\s]*(?:\(|（|)?([1-4A-D])(?:\)|）|)?/i);
-        if (answerMatch) {
-            currentObj.answer = parseOptionIndex(answerMatch[1]);
-            continue;
-        }
-
-        // 偵測解說
-        const expMatch = line.match(/^(?:解說|解析|說明)[:：\s]*(.+)/);
-        if (expMatch) {
-            currentObj.explanation = expMatch[1].trim();
-            continue;
-        }
-
-        // 如果都沒有匹配，試圖附加到題幹或解說
-        if (currentObj.explanation) {
-            currentObj.explanation += '\n' + line;
-        } else if (!currentObj.option_1) {
-            currentObj.question += '\n' + line;
         }
     }
 
-    if (currentObj && isQuestionValid(currentObj)) {
-        questions.push(currentObj);
-    }
+    pushCurrentObj();
 
     return questions;
-}
-
-function isQuestionValid(q) {
-    return q.question && q.option_1 && q.option_2 && q.answer >= 1 && q.answer <= 4;
-}
-
-function parseOptionIndex(val) {
-    if (['1', 'A', 'a'].includes(val)) return 1;
-    if (['2', 'B', 'b'].includes(val)) return 2;
-    if (['3', 'C', 'c'].includes(val)) return 3;
-    if (['4', 'D', 'd'].includes(val)) return 4;
-    return 1;
 }
