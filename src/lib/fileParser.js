@@ -86,7 +86,7 @@ function extractQuestions(text) {
             ];
 
             for (const m of markersList) {
-                const i1 = t.lastIndexOf(m[0]);
+                const i1 = t.indexOf(m[0]);
                 if (i1 === -1) continue;
                 const i2 = t.indexOf(m[1], i1);
                 if (i2 === -1) continue;
@@ -97,12 +97,27 @@ function extractQuestions(text) {
 
                 if (m[0] === 'Ａ' && i1 > 0 && t.substring(i1 - 1, i1).includes('(')) continue;
 
+                const o4Str = t.substring(i4 + m[3].length);
+                const o4Matches = ['。', ' ', '\n', '，', '、', '；', '：', '？', '！'];
+                let splitIdx = o4Str.length;
+                for (const p of o4Matches) {
+                    const pIdx = o4Str.indexOf(p);
+                    if (pIdx > 0 && pIdx < splitIdx) splitIdx = pIdx;
+                }
+
+                let o4Final = o4Str.substring(0, splitIdx);
+                let remTail = o4Str.substring(splitIdx).trim();
+
+                if (remTail) {
+                    remTail = remTail.replace(/^[。，、；：？！\s]+/, '').trim();
+                }
+
                 return {
-                    q: t.substring(0, i1).trim(),
+                    q: (t.substring(0, i1).trim() + (remTail ? ' ______ ' + remTail : '')),
                     o1: t.substring(i1 + m[0].length, i2).trim(),
                     o2: t.substring(i2 + m[1].length, i3).trim(),
                     o3: t.substring(i3 + m[2].length, i4).trim(),
-                    o4: t.substring(i4 + m[3].length).trim(),
+                    o4: o4Final.trim()
                 };
             }
             return null;
