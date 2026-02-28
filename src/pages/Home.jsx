@@ -17,6 +17,19 @@ export default function Home() {
       .catch(() => { setCategories(['全部']); setLoadingCats(false) })
   }, [])
 
+  const [customCount, setCustomCount] = useState('')
+
+  const handleCustomCount = (val) => {
+    const n = parseInt(val)
+    setCustomCount(val)
+    if (!isNaN(n) && n > 0) setCount(n)
+  }
+
+  const handlePresetCount = (n) => {
+    setCount(n)
+    setCustomCount('')
+  }
+
   const start = () => navigate('/quiz', { state: { count, category } })
 
   return (
@@ -31,19 +44,33 @@ export default function Home() {
       {/* 題數選擇 */}
       <div className="mb-6">
         <p className="text-slate-400 text-sm mb-3 font-medium">題數</p>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-2 mb-2">
           {COUNT_OPTIONS.map(n => (
             <button
               key={n}
-              onClick={() => setCount(n)}
-              className={`py-3 rounded-xl font-bold text-base border-2 transition-all ${count === n
-                  ? 'border-accent bg-yellow-950 text-accent'
-                  : 'border-slate-700 bg-surface text-slate-300 hover:border-slate-500'
+              onClick={() => handlePresetCount(n)}
+              className={`py-3 rounded-xl font-bold text-base border-2 transition-all ${count === n && !customCount
+                ? 'border-accent bg-yellow-950 text-accent'
+                : 'border-slate-700 bg-surface text-slate-300 hover:border-slate-500'
                 }`}
             >
               {n} 題
             </button>
           ))}
+        </div>
+        <div className="flex items-center gap-3 mt-2">
+          <label className="text-sm text-slate-400 whitespace-nowrap">自訂題數</label>
+          <input
+            type="number"
+            min="1"
+            max="999"
+            placeholder="輸入任意題數…"
+            value={customCount}
+            onChange={e => handleCustomCount(e.target.value)}
+            className={`flex-1 bg-surface border-2 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-200 focus:outline-none transition-all ${customCount ? 'border-accent text-accent bg-yellow-950' : 'border-slate-700 focus:border-slate-500'
+              }`}
+          />
+          {customCount && <span className="text-accent text-sm font-bold whitespace-nowrap">{count} 題</span>}
         </div>
       </div>
 
@@ -59,8 +86,8 @@ export default function Home() {
                 key={c}
                 onClick={() => setCategory(c)}
                 className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all text-sm font-medium ${category === c
-                    ? 'border-accent bg-yellow-950 text-accent'
-                    : 'border-slate-700 bg-surface text-slate-300 hover:border-slate-500'
+                  ? 'border-accent bg-yellow-950 text-accent'
+                  : 'border-slate-700 bg-surface text-slate-300 hover:border-slate-500'
                   }`}
               >
                 {c === '全部' ? '🔀 全部分類' : `📂 ${c}`}
