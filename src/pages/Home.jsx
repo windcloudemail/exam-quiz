@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getCategories, getRandomQuestions, getRandomWrongQuestions, getWrongPriorityQuestions, getWrongPriorityCount, login, getMasteryStats, getMe, getFlaggedCount } from '../lib/api.js'
+import { getCategories, getRandomQuestions, getRandomWrongQuestions, getWrongPriorityQuestions, getWrongPriorityCount, login, getMasteryStats, getMe, getFlaggedCount, resetMastery } from '../lib/api.js'
 
 // 5 段進度配色 — Claude 暖色調
 function progressColor(pct) {
@@ -35,8 +35,35 @@ export default function Home() {
   const [masteryMap, setMasteryMap] = useState({})
   const [wrongPriorityCount, setWrongPriorityCount] = useState(0)
   const [flaggedCount, setFlaggedCount] = useState(0)
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   const navigate = useNavigate()
+
+  // 重置精熟（解除精熟、保留錯題本）
+  const handleResetMastery = async () => {
+    setResetting(true)
+    try {
+      await resetMastery()
+      // 重新載入進度（精熟歸零）
+      const list = await getMasteryStats()
+      const map = {}
+      let sumTotal = 0, sumMastered = 0
+      for (const row of list) {
+        map[row.category] = { total: row.total, mastered: row.mastered }
+        sumTotal += row.total; sumMastered += row.mastered
+      }
+      map['全部'] = { total: sumTotal, mastered: sumMastered }
+      setMasteryMap(map)
+      const c = category === '全部' ? '' : category
+      getWrongPriorityCount(c).then(d => setWrongPriorityCount(d?.count ?? 0)).catch(() => {})
+      setResetOpen(false)
+    } catch (e) {
+      alert('重置失敗：' + (e.message || ''))
+    } finally {
+      setResetting(false)
+    }
+  }
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -337,7 +364,18 @@ export default function Home() {
 
       {/* 題本 */}
       <section className="mb-7">
-        <h2 className="text-xs font-semibold text-ink-soft uppercase tracking-wider mb-3">題本</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-semibold text-ink-soft uppercase tracking-wider">題本</h2>
+          {authUsername && (
+            <button
+              onClick={() => setResetOpen(true)}
+              className="text-[11px] px-2.5 py-1 border border-border text-ink-soft rounded hover:border-primary hover:text-primary transition-all"
+              title="解除所有精熟，題目重新出現（錯題本保留）"
+            >
+              ↻ 重置精熟
+            </button>
+          )}
+        </div>
         {loadingCats ? (
           <div className="flex flex-col gap-2">
             {[1, 2, 3].map(i => (
@@ -494,6 +532,40 @@ export default function Home() {
           </svg>
         )}
       </button>
+
+      {/* 重置精熟確認 modal */}
+      {resetOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => !resetting && setResetOpen(false)}>
+          <div className="bg-surface rounded-xl p-5 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="font-display text-lg font-semibold text-ink mb-2">重置精熟？</h3>
+            <p className="text-[13px] text-ink-soft leading-relaxed mb-3">
+              所有精熟題（含自動答對 3 次 + 手動「已會了」）會<span className="text-primary font-semibold">重新出現</span>，可以從頭再練一遍。
+            </p>
+            <div className="bg-card rounded-md px-3 py-2.5 mb-4 text-[12px] leading-relaxed">
+              <p className="text-correct font-medium mb-1">✓ 保留</p>
+              <p className="text-ink-soft mb-2">錯題本、錯題加強、答對/答錯統計</p>
+              <p className="text-primary font-medium mb-1">↻ 歸零</p>
+              <p className="text-ink-soft">精熟進度條（答對 3 次後會重新變精熟）</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setResetOpen(false)}
+                disabled={resetting}
+                className="flex-1 py-2.5 border border-border text-ink-soft rounded-md text-sm hover:border-border-strong hover:text-ink disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleResetMastery}
+                disabled={resetting}
+                className="flex-1 py-2.5 bg-primary text-surface rounded-md text-sm font-semibold hover:bg-primary-dim disabled:opacity-50"
+              >
+                {resetting ? '重置中…' : '確定重置'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -38,11 +38,12 @@ CREATE INDEX IF NOT EXISTS idx_failures_category ON import_failures(category, so
 
 -- 使用者帳號（簡易版，密碼明文儲存，供自用 / 親友圈使用）
 CREATE TABLE IF NOT EXISTS users (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  username   TEXT    NOT NULL UNIQUE,        -- admin 或 4 位數字 (MMDD)
-  password   TEXT    NOT NULL,                -- admin 自訂 / 一般用戶為 4 位數字 (YYYY)
-  role       TEXT    NOT NULL DEFAULT 'user', -- 'admin' | 'user'
-  created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  username         TEXT    NOT NULL UNIQUE,        -- admin 或 4 位數字 (MMDD)
+  password         TEXT    NOT NULL,                -- admin 自訂 / 一般用戶為 4 位數字 (YYYY)
+  role             TEXT    NOT NULL DEFAULT 'user', -- 'admin' | 'user'
+  mastery_reset_at TEXT,                            -- 精熟重置時間點：自動精熟只算此時間之後答對的（NULL=不過濾）
+  created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 INSERT OR IGNORE INTO users (username, password, role) VALUES ('admin', 'admin123', 'admin');

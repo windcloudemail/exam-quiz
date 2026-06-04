@@ -121,3 +121,7 @@ export const getFlaggedQuestions = () =>
 // 有疑義題目數（給 Home 入口顯示）
 export const getFlaggedCount = () =>
   request('/stats/flagged-count')
+
+// 重置精熟（解除精熟、保留錯題本）
+export const resetMastery = () =>
+  request('/reset-mastery', { method: 'POST' })

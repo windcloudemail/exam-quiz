@@ -9,7 +9,11 @@ export async function onRequestGet({ env, data }) {
         return Response.json({ success: false, error: '請先登入' }, { status: 401 })
     }
 
-    // mastered = 自動精熟（答對 ≥ 3 次）OR 手動精熟（user 主動標記）
+    // 精熟重置時間點：自動精熟只算此時間之後的答對（NULL = 不過濾，算全部）
+    const u = await env.DB.prepare('SELECT mastery_reset_at FROM users WHERE id = ?').bind(userId).first()
+    const resetAt = u?.mastery_reset_at || null
+
+    // mastered = 自動精熟（reset 後答對 ≥ 3 次）OR 手動精熟（user 主動標記）
     const sql = `
         SELECT
           q.category AS category,
@@ -24,7 +28,7 @@ export async function onRequestGet({ env, data }) {
         LEFT JOIN (
           SELECT question_id, COUNT(*) AS cnt
           FROM user_attempts
-          WHERE user_id = ? AND correct = 1
+          WHERE user_id = ? AND correct = 1 AND (? IS NULL OR attempted_at > ?)
           GROUP BY question_id
         ) ua ON ua.question_id = q.id
         LEFT JOIN (
@@ -36,6 +40,6 @@ export async function onRequestGet({ env, data }) {
         ORDER BY q.category ASC
     `
 
-    const { results } = await env.DB.prepare(sql).bind(userId, userId).all()
+    const { results } = await env.DB.prepare(sql).bind(userId, resetAt, resetAt, userId).all()
     return Response.json({ success: true, data: results })
 }

@@ -102,6 +102,7 @@ export async function onRequest(context) {
             (path === '/api/attempts' && isMutation) ||
             (path === '/api/questions/random-wrong') ||
             (path === '/api/questions/wrong-priority') ||
+            (path === '/api/reset-mastery') ||
             (path.startsWith('/api/stats/')) ||
             (path.startsWith('/api/marks'))
 

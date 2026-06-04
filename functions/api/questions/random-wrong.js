@@ -12,6 +12,10 @@ export async function onRequestGet({ request, env, data }) {
     const category = url.searchParams.get('category') || ''
     const excludeMastered = url.searchParams.get('exclude_mastered') === '1'
 
+    // 精熟重置時間點
+    const u = await env.DB.prepare('SELECT mastery_reset_at FROM users WHERE id = ?').bind(userId).first()
+    const resetAt = u?.mastery_reset_at || null
+
     const args = [userId]
     let sql = `
         SELECT q.* FROM questions q
@@ -31,10 +35,10 @@ export async function onRequestGet({ request, env, data }) {
     if (excludeMastered) {
         sql += ` AND q.id NOT IN (
             SELECT question_id FROM user_attempts
-            WHERE user_id = ? AND correct = 1
+            WHERE user_id = ? AND correct = 1 AND (? IS NULL OR attempted_at > ?)
             GROUP BY question_id HAVING COUNT(*) >= 3
         )`
-        args.push(userId)
+        args.push(userId, resetAt, resetAt)
     }
 
     if (category) {

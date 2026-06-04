@@ -8,6 +8,13 @@ export async function onRequestGet({ request, env, data }) {
     const excludeMastered = url.searchParams.get('exclude_mastered') === '1'
     const userId = data?.userId
 
+    // 精熟重置時間點：自動精熟只算此時間之後的答對
+    let resetAt = null
+    if (userId) {
+        const u = await env.DB.prepare('SELECT mastery_reset_at FROM users WHERE id = ?').bind(userId).first()
+        resetAt = u?.mastery_reset_at || null
+    }
+
     let sql = 'SELECT * FROM questions WHERE 1 = 1'
     const args = []
 
@@ -28,10 +35,10 @@ export async function onRequestGet({ request, env, data }) {
     if (excludeMastered && userId) {
         sql += ` AND id NOT IN (
             SELECT question_id FROM user_attempts
-            WHERE user_id = ? AND correct = 1
+            WHERE user_id = ? AND correct = 1 AND (? IS NULL OR attempted_at > ?)
             GROUP BY question_id HAVING COUNT(*) >= 3
         )`
-        args.push(userId)
+        args.push(userId, resetAt, resetAt)
     }
 
     sql += ' ORDER BY RANDOM() LIMIT ?'

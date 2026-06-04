@@ -4,11 +4,12 @@
 --
 -- 如果是全新的 D1，請改用 schema.sql
 
--- ⚠️ 以下三條 ALTER 已於早期一次性 apply 過，重跑會 'duplicate column'。
+-- ⚠️ 以下 ALTER 已於早期一次性 apply 過，重跑會 'duplicate column'。
 -- 如果是新建 D1，請手動取消註解後再跑（或直接用 schema.sql）。
 -- ALTER TABLE questions ADD COLUMN source_number INTEGER;
 -- ALTER TABLE questions ADD COLUMN correct_count INTEGER NOT NULL DEFAULT 0;
 -- ALTER TABLE questions ADD COLUMN wrong_count INTEGER NOT NULL DEFAULT 0;
+-- ALTER TABLE users ADD COLUMN mastery_reset_at TEXT;  -- 2026-04-24 精熟重置功能
 
 CREATE INDEX IF NOT EXISTS idx_questions_category ON questions(category);
 CREATE INDEX IF NOT EXISTS idx_questions_source ON questions(category, source_number);
